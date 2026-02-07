@@ -1,4 +1,3 @@
-import { getStore } from "@netlify/blobs"
 import { randomUUID } from "crypto"
 
 const STORE_NAME = "ideas"
@@ -55,22 +54,80 @@ export interface Idea {
   }>
 }
 
-function getIdeasStore() {
-  return getStore(STORE_NAME, { consistency: "strong" })
+// ---------------------------------------------------------------------------
+// Storage backend abstraction
+// Uses Netlify Blobs when running on Netlify, otherwise falls back to
+// in-memory storage so the app works in local dev / Vercel / v0 previews.
+// ---------------------------------------------------------------------------
+
+let useNetlifyBlobs: boolean | null = null // null = not yet determined
+let netlifyStore: ReturnType<typeof import("@netlify/blobs").getStore> | null = null
+
+// In-memory fallback
+let memoryStore: Idea[] = []
+
+async function getNetlifyStore() {
+  if (netlifyStore) return netlifyStore
+  try {
+    const { getStore } = await import("@netlify/blobs")
+    const store = getStore(STORE_NAME, { consistency: "strong" })
+    // Probe with a lightweight read to verify the context is valid
+    await store.get(IDEAS_KEY)
+    netlifyStore = store
+    useNetlifyBlobs = true
+    return store
+  } catch {
+    useNetlifyBlobs = false
+    return null
+  }
 }
 
 async function readIdeas(): Promise<Idea[]> {
-  const store = getIdeasStore()
-  const data = await store.get(IDEAS_KEY, { type: "json" })
-  if (!data) {
-    return []
+  // Fast path – if we already know the backend
+  if (useNetlifyBlobs === true && netlifyStore) {
+    try {
+      const data = await netlifyStore.get(IDEAS_KEY, { type: "json" })
+      return (data as Idea[]) ?? []
+    } catch {
+      // Store became unavailable; fall through to memory
+      useNetlifyBlobs = false
+      netlifyStore = null
+    }
   }
-  return data as Idea[]
+
+  if (useNetlifyBlobs === null) {
+    const store = await getNetlifyStore()
+    if (store) {
+      const data = await store.get(IDEAS_KEY, { type: "json" })
+      return (data as Idea[]) ?? []
+    }
+  }
+
+  // Fallback: in-memory storage
+  return [...memoryStore]
 }
 
 async function writeIdeas(ideas: Idea[]): Promise<void> {
-  const store = getIdeasStore()
-  await store.setJSON(IDEAS_KEY, ideas)
+  if (useNetlifyBlobs === true && netlifyStore) {
+    try {
+      await netlifyStore.setJSON(IDEAS_KEY, ideas)
+      return
+    } catch {
+      useNetlifyBlobs = false
+      netlifyStore = null
+    }
+  }
+
+  if (useNetlifyBlobs === null) {
+    const store = await getNetlifyStore()
+    if (store) {
+      await store.setJSON(IDEAS_KEY, ideas)
+      return
+    }
+  }
+
+  // Fallback: in-memory storage
+  memoryStore = [...ideas]
 }
 
 // --- Public API ---

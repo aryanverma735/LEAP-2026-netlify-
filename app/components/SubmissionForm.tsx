@@ -10,6 +10,7 @@ import { User, Building, Users, Briefcase, FileText, Lightbulb, DollarSign, Mess
 export default function SubmissionForm() {
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     ideaId: "",
     associateDomainId: "",
@@ -59,6 +60,7 @@ export default function SubmissionForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
+    setSubmitError(null)
 
     try {
       const submissionData = {
@@ -70,14 +72,24 @@ export default function SubmissionForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(submissionData),
       })
+
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || "Submission failed")
+        let errorMsg = "Submission failed"
+        try {
+          const data = await res.json()
+          errorMsg = data.error || errorMsg
+        } catch {
+          // Response body was not valid JSON
+        }
+        throw new Error(errorMsg)
       }
+
       router.push("/submission-success")
     } catch (error) {
-      console.error("Error submitting idea:", error)
-      alert("Error submitting idea. Please try again.")
+      const message =
+        error instanceof Error ? error.message : "An unexpected error occurred"
+      console.error("Error submitting idea:", message)
+      setSubmitError(message)
     } finally {
       setIsSubmitting(false)
     }
@@ -94,6 +106,47 @@ export default function SubmissionForm() {
       </div>
 
       <form onSubmit={handleSubmit} className="bg-white rounded-b-2xl shadow-xl p-8 space-y-8">
+        {/* Error Banner */}
+        {submitError && (
+          <div
+            role="alert"
+            className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4"
+          >
+            <svg
+              className="mt-0.5 h-5 w-5 shrink-0 text-red-600"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                fillRule="evenodd"
+                d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z"
+                clipRule="evenodd"
+              />
+            </svg>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-red-800">
+                Failed to submit your idea
+              </p>
+              <p className="mt-1 text-sm text-red-700">{submitError}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSubmitError(null)}
+              className="shrink-0 text-red-500 hover:text-red-700"
+              aria-label="Dismiss error"
+            >
+              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path
+                  fillRule="evenodd"
+                  d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </button>
+          </div>
+        )}
+
         {/* Personal Information Section */}
         <div className="space-y-6">
           <div className="flex items-center gap-2 mb-4">
