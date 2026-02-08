@@ -58,6 +58,9 @@ export default function BusinessAnalystReview() {
   const [approverData, setApproverData] = useState({ domainId: "", name: "", selectedFromDropdown: "" })
   const [rejectionComment, setRejectionComment] = useState("")
   const [currentIdeaId, setCurrentIdeaId] = useState<string | null>(null)
+  const [actionLoading, setActionLoading] = useState<string | null>(null) // tracks idea id being acted on
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null)
   const [filter, setFilter] = useState({
     associateName: "",
     associateDomainId: "",
@@ -126,9 +129,13 @@ export default function BusinessAnalystReview() {
 
   const handleApprove = async (id: string) => {
     if (!approverData.domainId || !approverData.name) {
-      alert("Please enter Approver Domain ID and Name before approving.")
+      setActionError("Please select or enter Approver Domain ID and Name before approving.")
       return
     }
+
+    setActionLoading(id)
+    setActionError(null)
+    setActionSuccess(null)
 
     try {
       const res = await fetch(`/api/ideas/${id}/approve`, {
@@ -139,22 +146,41 @@ export default function BusinessAnalystReview() {
           approverName: approverData.name,
         }),
       })
-      if (!res.ok) throw new Error("Failed to approve idea")
+
+      if (!res.ok) {
+        let errorMsg = "Failed to approve idea"
+        try {
+          const data = await res.json()
+          errorMsg = data.error || errorMsg
+        } catch {
+          // non-JSON response
+        }
+        throw new Error(errorMsg)
+      }
+
       setIdeas(ideas.filter((idea) => idea.id !== id))
       setCurrentIdeaId(null)
       setFocusedIdea(null)
-      alert("Idea approved successfully!")
+      setActionSuccess("Idea approved successfully!")
+      setTimeout(() => setActionSuccess(null), 4000)
     } catch (error) {
-      console.error("Error approving idea:", error)
-      alert("Error approving idea. Please try again.")
+      const message = error instanceof Error ? error.message : "An unexpected error occurred"
+      console.error("Error approving idea:", message)
+      setActionError(message)
+    } finally {
+      setActionLoading(null)
     }
   }
 
   const handleReject = async (id: string) => {
     if (!approverData.domainId || !approverData.name || !rejectionComment) {
-      alert("Please enter Approver Domain ID, Name, and Rejection Comment before rejecting.")
+      setActionError("Please enter Approver Domain ID, Name, and Rejection Comment before rejecting.")
       return
     }
+
+    setActionLoading(id)
+    setActionError(null)
+    setActionSuccess(null)
 
     try {
       const res = await fetch(`/api/ideas/${id}/reject`, {
@@ -166,15 +192,30 @@ export default function BusinessAnalystReview() {
           rejectionComment,
         }),
       })
-      if (!res.ok) throw new Error("Failed to reject idea")
+
+      if (!res.ok) {
+        let errorMsg = "Failed to reject idea"
+        try {
+          const data = await res.json()
+          errorMsg = data.error || errorMsg
+        } catch {
+          // non-JSON response
+        }
+        throw new Error(errorMsg)
+      }
+
       setIdeas(ideas.filter((idea) => idea.id !== id))
       setRejectionComment("")
       setCurrentIdeaId(null)
       setFocusedIdea(null)
-      alert("Idea rejected successfully!")
+      setActionSuccess("Idea rejected successfully!")
+      setTimeout(() => setActionSuccess(null), 4000)
     } catch (error) {
-      console.error("Error rejecting idea:", error)
-      alert("Error rejecting idea. Please try again.")
+      const message = error instanceof Error ? error.message : "An unexpected error occurred"
+      console.error("Error rejecting idea:", message)
+      setActionError(message)
+    } finally {
+      setActionLoading(null)
     }
   }
 
@@ -556,13 +597,36 @@ export default function BusinessAnalystReview() {
                 </div>
               </div>
 
+              {/* Notification Banners */}
+              {actionError && (
+                <div role="alert" className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4">
+                  <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
+                  <p className="flex-1 text-sm text-red-700">{actionError}</p>
+                  <button type="button" onClick={() => setActionError(null)} className="shrink-0 text-red-500 hover:text-red-700" aria-label="Dismiss error">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+              {actionSuccess && (
+                <div role="status" className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 p-4">
+                  <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
+                  <p className="flex-1 text-sm text-green-700">{actionSuccess}</p>
+                </div>
+              )}
+
               {/* Action Buttons */}
               <div className="space-y-3">
                 <button
                   onClick={() => handleApprove(focusedIdea.id)}
-                  className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 px-4 rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all transform hover:scale-105 shadow-lg flex items-center justify-center gap-2"
+                  disabled={!!actionLoading}
+                  className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 px-4 rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all transform hover:scale-105 shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                 >
-                  <CheckCircle className="h-5 w-5" /> Approve Idea
+                  {actionLoading === focusedIdea.id ? (
+                    <Loader className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <CheckCircle className="h-5 w-5" />
+                  )}{" "}
+                  Approve Idea
                 </button>
 
                 <button
@@ -570,7 +634,8 @@ export default function BusinessAnalystReview() {
                     setCurrentIdeaId(focusedIdea.id)
                     setRejectionComment("")
                   }}
-                  className="w-full bg-gradient-to-r from-red-500 to-red-600 text-white py-3 px-4 rounded-lg hover:from-red-600 hover:to-red-700 transition-all transform hover:scale-105 shadow-lg flex items-center justify-center gap-2"
+                  disabled={!!actionLoading}
+                  className="w-full bg-gradient-to-r from-red-500 to-red-600 text-white py-3 px-4 rounded-lg hover:from-red-600 hover:to-red-700 transition-all transform hover:scale-105 shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                 >
                   <XCircle className="h-5 w-5" /> Prepare Rejection
                 </button>
@@ -589,9 +654,15 @@ export default function BusinessAnalystReview() {
                   />
                   <button
                     onClick={() => handleReject(focusedIdea.id)}
-                    className="w-full mt-4 bg-gradient-to-r from-red-500 to-red-600 text-white py-3 px-4 rounded-lg hover:from-red-600 hover:to-red-700 transition-all flex items-center justify-center gap-2"
+                    disabled={!!actionLoading}
+                    className="w-full mt-4 bg-gradient-to-r from-red-500 to-red-600 text-white py-3 px-4 rounded-lg hover:from-red-600 hover:to-red-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <XCircle className="h-5 w-5" /> Confirm Rejection
+                    {actionLoading === focusedIdea.id ? (
+                      <Loader className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <XCircle className="h-5 w-5" />
+                    )}{" "}
+                    Confirm Rejection
                   </button>
                 </div>
               )}
@@ -701,6 +772,23 @@ export default function BusinessAnalystReview() {
             </div>
           </div>
         </div>
+
+        {/* Notification Banners */}
+        {actionError && (
+          <div role="alert" className="mb-6 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4">
+            <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
+            <p className="flex-1 text-sm text-red-700">{actionError}</p>
+            <button type="button" onClick={() => setActionError(null)} className="shrink-0 text-red-500 hover:text-red-700" aria-label="Dismiss error">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+        {actionSuccess && (
+          <div role="status" className="mb-6 flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 p-4">
+            <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
+            <p className="flex-1 text-sm text-green-700">{actionSuccess}</p>
+          </div>
+        )}
 
         {/* Business Analyst Information */}
         {showBAInfo && (
@@ -909,10 +997,11 @@ export default function BusinessAnalystReview() {
                             <div className="flex gap-2">
                               <button
                                 onClick={() => handleApprove(idea.id)}
-                                className="p-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors"
+                                disabled={!!actionLoading}
+                                className="p-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 title="Approve"
                               >
-                                <CheckCircle className="h-4 w-4" />
+                                {actionLoading === idea.id ? <Loader className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
                               </button>
                               <button
                                 onClick={() => setFocusedIdea(idea)}
@@ -926,7 +1015,8 @@ export default function BusinessAnalystReview() {
                                   setCurrentIdeaId(idea.id)
                                   setRejectionComment("")
                                 }}
-                                className="p-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors"
+                                disabled={!!actionLoading}
+                                className="p-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 title="Reject"
                               >
                                 <XCircle className="h-4 w-4" />
@@ -944,9 +1034,10 @@ export default function BusinessAnalystReview() {
                                 />
                                 <button
                                   onClick={() => handleReject(idea.id)}
-                                  className="w-full bg-red-600 text-white py-1 px-2 rounded text-xs hover:bg-red-700 transition-colors"
+                                  disabled={!!actionLoading}
+                                  className="w-full bg-red-600 text-white py-1 px-2 rounded text-xs hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                  Confirm Rejection
+                                  {actionLoading === idea.id ? "Rejecting..." : "Confirm Rejection"}
                                 </button>
                               </div>
                             )}
@@ -1070,10 +1161,11 @@ export default function BusinessAnalystReview() {
                             <div className="flex gap-2">
                               <button
                                 onClick={() => handleApprove(idea.id)}
-                                className="p-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors"
+                                disabled={!!actionLoading}
+                                className="p-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 title="Approve"
                               >
-                                <CheckCircle className="h-4 w-4" />
+                                {actionLoading === idea.id ? <Loader className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
                               </button>
                               <button
                                 onClick={() => setFocusedIdea(idea)}
@@ -1087,7 +1179,8 @@ export default function BusinessAnalystReview() {
                                   setCurrentIdeaId(idea.id)
                                   setRejectionComment("")
                                 }}
-                                className="p-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors"
+                                disabled={!!actionLoading}
+                                className="p-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 title="Reject"
                               >
                                 <XCircle className="h-4 w-4" />
@@ -1105,9 +1198,10 @@ export default function BusinessAnalystReview() {
                                 />
                                 <button
                                   onClick={() => handleReject(idea.id)}
-                                  className="w-full bg-red-600 text-white py-1 px-2 rounded text-xs hover:bg-red-700 transition-colors"
+                                  disabled={!!actionLoading}
+                                  className="w-full bg-red-600 text-white py-1 px-2 rounded text-xs hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                  Confirm Rejection
+                                  {actionLoading === idea.id ? "Rejecting..." : "Confirm Rejection"}
                                 </button>
                               </div>
                             )}

@@ -45,7 +45,7 @@ export default function RootLayout({
                 </p>
               </div>
               <div className="text-sm opacity-80">
-                © {new Date().getFullYear()} Carelon Global Solutions. All rights reserved.
+                © {new Date().getFullYear()} LEAP. All rights reserved.
               </div>
             </div>
           </div>

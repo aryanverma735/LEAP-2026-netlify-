@@ -25,6 +25,7 @@ export async function POST(
       approverDomainId: body.approverDomainId,
       approverName: body.approverName,
       rejectionComment: body.rejectionComment,
+      status: "Rejected",
       rejectedDate: new Date().toISOString(),
     })
 
