@@ -1,7 +1,6 @@
 "use client"
 
 import Link from "next/link"
-import Image from "next/image"
 import { useState } from "react"
 import { Menu, X } from "lucide-react"
 
@@ -17,15 +16,9 @@ export default function Header() {
       <div className="container mx-auto px-4">
         <nav className="flex items-center justify-between h-16">
           <div className="flex items-center gap-2">
-            <Image
-              src="/images/design-mode/CARELON%20LOGO.png"
-              alt="Carelon Global Solutions Logo"
-              width={40}
-              height={40}
-              className="object-contain"
-            />
+            {/* Logo removed */}
             <Link href="/" className="text-2xl font-bold hover:text-white transition-colors">
-              LEAP Tool
+              LEAP
             </Link>
           </div>
 
